@@ -49,6 +49,8 @@ const t: Dict = {
   healthBreakdown: { uz: 'Daraxtlar holati', ru: 'Состояние деревьев' },
   healthy: { uz: 'Sog\'lom', ru: 'Здоровые' },
 
+  close: { uz: 'Yopish', ru: 'Закрыть' },
+  statsTab: { uz: 'Statistika', ru: 'Статистика' },
   speciesTitle: { uz: 'Daraxt turlari', ru: 'Породы деревьев' },
   sp_chinor: { uz: 'Chinor', ru: 'Чинар' },
   sp_dub: { uz: 'Eman', ru: 'Дуб' },

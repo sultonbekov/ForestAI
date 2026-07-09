@@ -18,11 +18,11 @@ function Card({
   accent: string
 }) {
   return (
-    <div className="rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2">
-      <div className="text-xl font-bold" style={{ color: accent }}>
+    <div className="min-w-[104px] shrink-0 rounded-xl border border-slate-700/50 bg-slate-800/40 px-3 py-2 sm:min-w-0">
+      <div className="text-base font-bold sm:text-xl" style={{ color: accent }}>
         {value}
       </div>
-      <div className="text-[11px] leading-tight text-slate-400">{label}</div>
+      <div className="text-[10px] leading-tight text-slate-400 sm:text-[11px]">{label}</div>
     </div>
   )
 }
@@ -34,7 +34,7 @@ export default function StatsSummary({ lang, totalTrees, avgGreenery, districts 
       : `${Math.round(totalTrees / 1000)}k`
 
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:gap-2.5 sm:overflow-visible sm:pb-0 lg:grid-cols-6">
       <Card value="30%" label={tr('target2030', lang)} accent="#4ade80" />
       <Card
         value={`${avgGreenery}%`}
