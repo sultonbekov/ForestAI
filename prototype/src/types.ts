@@ -14,6 +14,23 @@ export interface TrendPoint {
   greeneryPercent: number
 }
 
+// Daraxt turi (species) — bargli daraxtlar klassifikatsiyasi
+export type SpeciesId =
+  | 'chinor'
+  | 'dub'
+  | 'klen'
+  | 'bereza'
+  | 'osina'
+  | 'iva'
+  | 'kashtan'
+  | 'ryabina'
+
+export interface SpeciesShare {
+  id: SpeciesId
+  percent: number // ushbu turdagi daraxtlar ulushi, %
+  count: number // taxminiy soni
+}
+
 export interface RegionStats {
   id: string
   name: string
@@ -27,6 +44,7 @@ export interface RegionStats {
   perCapitaM2: number // aholi jon boshiga yashil hudud, m2
   lastSurveyDate: string
   trend: TrendPoint[] // 2021..2026
+  species: SpeciesShare[] // daraxt turlari taqsimoti (kamayish bo'yicha)
 }
 
 export type ViewMode = '2d' | '3d'

@@ -49,6 +49,16 @@ const t: Dict = {
   healthBreakdown: { uz: 'Daraxtlar holati', ru: 'Состояние деревьев' },
   healthy: { uz: 'Sog\'lom', ru: 'Здоровые' },
 
+  speciesTitle: { uz: 'Daraxt turlari', ru: 'Породы деревьев' },
+  sp_chinor: { uz: 'Chinor', ru: 'Чинар' },
+  sp_dub: { uz: 'Eman', ru: 'Дуб' },
+  sp_klen: { uz: 'Zarang', ru: 'Клён' },
+  sp_bereza: { uz: 'Qayin', ru: 'Берёза' },
+  sp_osina: { uz: 'Tol terak', ru: 'Осина' },
+  sp_iva: { uz: 'Tol', ru: 'Ива' },
+  sp_kashtan: { uz: 'Kashtan', ru: 'Каштан' },
+  sp_ryabina: { uz: 'Chetan', ru: 'Рябина' },
+
   legendTitle: { uz: 'Yashillik darajasi', ru: 'Уровень озеленения' },
   legendLow: { uz: 'past', ru: 'низкий' },
   legendHigh: { uz: 'yuqori', ru: 'высокий' },
@@ -65,6 +75,12 @@ const t: Dict = {
 
 export function tr(key: keyof typeof t, lang: Lang): string {
   return t[key]?.[lang] ?? String(key)
+}
+
+// Daraxt turi nomi (species id -> UZ/RU)
+export function speciesName(id: string, lang: Lang): string {
+  const key = `sp_${id}` as keyof typeof t
+  return t[key]?.[lang] ?? id
 }
 
 // Tuman nomlarini toza ko'rsatish (kodlash muammolarini yumshatish)

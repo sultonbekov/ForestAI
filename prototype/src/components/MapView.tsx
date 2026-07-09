@@ -108,8 +108,8 @@ export default function MapView({
         return {
           fillColor: st ? greeneryColor(st.greeneryPercent) : '#334155',
           weight: isSel ? 3 : level === 'region' ? 1.6 : 0.7,
-          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.6)',
-          fillOpacity: isSel ? 0.9 : 0.78,
+          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.55)',
+          fillOpacity: 1, // to'liq to'q, shaffofsiz maska (bizning dark stil)
         }
       },
     [statsById, selectedId, level]
@@ -131,7 +131,7 @@ export default function MapView({
       }
       layer.on({
         click: () => onSelect(key),
-        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: 0.95, weight: 2 }),
+        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: 1, weight: 2 }),
         mouseout: (e) => (e.target as any).setStyle(styleFor(feature as Feature)),
       })
     },

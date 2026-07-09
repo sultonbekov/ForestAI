@@ -1,4 +1,18 @@
-import type { RegionStats, TrendPoint } from '../types'
+import type { RegionStats, TrendPoint, SpeciesId, SpeciesShare } from '../types'
+
+// Bargli daraxt turlari (rasmga mos + chinor)
+export const SPECIES: { id: SpeciesId; color: string; emoji: string }[] = [
+  { id: 'chinor', color: '#3f9142', emoji: '🌳' },
+  { id: 'dub', color: '#6b8e23', emoji: '🌰' },
+  { id: 'klen', color: '#e2711d', emoji: '🍁' },
+  { id: 'bereza', color: '#8bc34a', emoji: '🌲' },
+  { id: 'osina', color: '#c0392b', emoji: '🍂' },
+  { id: 'iva', color: '#2e8b57', emoji: '🌿' },
+  { id: 'kashtan', color: '#7cb342', emoji: '🌰' },
+  { id: 'ryabina', color: '#d84315', emoji: '🍒' },
+]
+
+export const speciesMeta = (id: SpeciesId) => SPECIES.find((s) => s.id === id)!
 
 // Barqaror (deterministik) pseudo-random generator — sahifa yangilanganda
 // raqamlar o'zgarmasligi uchun. Har bir hudud nomidan seed olinadi.
@@ -58,6 +72,22 @@ export function generateStats(id: string, name: string): RegionStats {
   const months = ['yanvar', 'mart', 'aprel', 'may', 'sentabr', 'oktabr']
   const lastSurveyDate = `2026-yil, ${months[Math.floor(rand() * months.length)]}`
 
+  // Daraxt turlari taqsimoti — har turga tasodifiy vazn, keyin normallash
+  const weights = SPECIES.map((s) => {
+    // chinor va dub biroz ustunroq (mahalliy keng tarqalgan)
+    const base = s.id === 'chinor' ? 1.6 : s.id === 'dub' ? 1.3 : 1
+    return base * (0.3 + rand())
+  })
+  const wSum = weights.reduce((a, b) => a + b, 0)
+  const species: SpeciesShare[] = SPECIES.map((s, i) => {
+    const pct = (weights[i] / wSum) * 100
+    return {
+      id: s.id,
+      percent: round(pct, 1),
+      count: Math.round(treeCount * (pct / 100)),
+    }
+  }).sort((a, b) => b.percent - a.percent)
+
   return {
     id,
     name,
@@ -71,6 +101,7 @@ export function generateStats(id: string, name: string): RegionStats {
     perCapitaM2,
     lastSurveyDate,
     trend,
+    species,
   }
 }
 

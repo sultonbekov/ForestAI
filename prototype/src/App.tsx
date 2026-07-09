@@ -12,7 +12,11 @@ type Level = 'region' | 'district'
 
 export default function App() {
   const { regions, districts, statsById, loading, error, national } = useRegionData()
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    const m = window.location.hash.match(/sel=([a-z]+:\d+)/)
+    return m ? m[1] : null
+  })
   const [lang, setLang] = useState<Lang>('ru')
   const [view, setView] = useState<ViewMode>(
     typeof window !== 'undefined' && window.location.hash.includes('chart') ? 'chart' : 'map'

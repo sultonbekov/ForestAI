@@ -1,7 +1,7 @@
 import type { RegionStats } from '../types'
 import type { Lang } from '../i18n'
-import { tr } from '../i18n'
-import { greeneryColor } from '../data/generateStats'
+import { tr, speciesName } from '../i18n'
+import { greeneryColor, speciesMeta } from '../data/generateStats'
 import RegionChart from './RegionChart'
 
 interface Props {
@@ -130,6 +130,41 @@ export default function RegionPanel({ stats, lang }: Props) {
           <span className="text-emerald-400">● {tr('healthy', lang)}</span>
           <span className="text-yellow-400">● {tr('atRisk', lang)}</span>
           <span className="text-red-400">● {tr('dead', lang)}</span>
+        </div>
+      </div>
+
+      {/* Daraxt turlari (species) */}
+      <div className="rounded-xl bg-slate-800/40 border border-slate-700/50 p-3">
+        <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+          {tr('speciesTitle', lang)}
+        </div>
+
+        {/* Stacked bar */}
+        <div className="mb-2.5 flex h-3 overflow-hidden rounded-full">
+          {stats.species.map((sp) => (
+            <div
+              key={sp.id}
+              style={{ width: `${sp.percent}%`, background: speciesMeta(sp.id).color }}
+              title={`${speciesName(sp.id, lang)} — ${sp.percent}%`}
+            />
+          ))}
+        </div>
+
+        {/* Species list */}
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {stats.species.map((sp) => (
+            <div key={sp.id} className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-sm"
+                style={{ background: speciesMeta(sp.id).color }}
+              />
+              <span className="text-sm">{speciesMeta(sp.id).emoji}</span>
+              <span className="flex-1 truncate text-xs text-slate-300">
+                {speciesName(sp.id, lang)}
+              </span>
+              <span className="text-xs font-semibold text-slate-200">{sp.percent}%</span>
+            </div>
+          ))}
         </div>
       </div>
 
