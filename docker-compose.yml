@@ -1,0 +1,10 @@
+services:
+  forest-ai:
+    build:
+      context: ./prototype
+      dockerfile: Dockerfile
+    image: forest-ai:latest
+    container_name: forest-ai
+    ports:
+      - "8080:80"
+    restart: unless-stopped

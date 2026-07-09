@@ -1,0 +1,143 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #0b1220;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Leaflet konteyner dark fon */
+.leaflet-container {
+  background: #0b1220;
+  font-family: inherit;
+}
+
+.leaflet-tooltip.forest-tip {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+}
+.leaflet-tooltip.forest-tip::before {
+  display: none;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 3D ustunli diagramma yozuvlari */
+.bar3d-label {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+}
+.bar3d-label .b3-val {
+  font-size: 13px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+.bar3d-label .b3-name {
+  font-size: 9px;
+  font-weight: 500;
+  color: #cbd5e1;
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* 3D foiz yozuvlari */
+.label3d {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.label3d .l3-val {
+  font-size: 12px;
+  font-weight: 800;
+  color: #ffffff;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(10, 15, 25, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+}
+
+/* Foiz yozuvlari (xarita ustida) */
+.pct-label {
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9), 0 0 8px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  user-select: none;
+}
+.pct-region .pct-name {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-bottom: 2px;
+  opacity: 0.9;
+}
+.pct-region .pct-val {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+}
+.pct-district .pct-val {
+  font-size: 10px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade {
+  animation: fadeIn 0.25s ease-out;
+}
