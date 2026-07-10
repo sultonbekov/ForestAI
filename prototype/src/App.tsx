@@ -1,17 +1,24 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRegionData } from './hooks/useRegionData'
 import type { Lang } from './i18n'
 import { tr } from './i18n'
 import MapView from './components/MapView'
 import Chart3D from './components/Chart3D'
 import RegionPanel from './components/RegionPanel'
+import ZonePanel from './components/ZonePanel'
 import StatsSummary from './components/StatsSummary'
+import { generateZoneStats } from './data/generateStats'
 
 type ViewMode = 'map' | 'chart'
 type Level = 'region' | 'district'
 
 export default function App() {
-  const { regions, districts, statsById, loading, error, national } = useRegionData()
+  const { regions, districts, mfy, statsById, loading, error, national } = useRegionData()
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
+    const m = window.location.hash.match(/zone=(\d+)/)
+    return m ? `mfy:${m[1]}` : null
+  })
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null
     const m = window.location.hash.match(/sel=([a-z]+:\d+)/)
@@ -32,6 +39,16 @@ export default function App() {
 
   const selected = selectedId ? statsById[selectedId] ?? null : null
   const ready = regions && districts && !error
+
+  // Tanlangan MFY zonasi statistikasi
+  const selectedZone = useMemo(() => {
+    if (!selectedZoneId || !mfy) return null
+    const id = selectedZoneId.replace('mfy:', '')
+    const f = mfy.features.find((ff) => String(ff.id) === id)
+    if (!f) return null
+    const p = f.properties as { name?: string; districtName?: string }
+    return generateZoneStats(selectedZoneId, p.name ?? '', p.districtName ?? '')
+  }, [selectedZoneId, mfy])
 
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden">
@@ -142,9 +159,14 @@ export default function App() {
               <MapView
                 regions={regions}
                 districts={districts}
+                mfy={mfy}
                 statsById={statsById}
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selectedId={selectedZoneId ?? selectedId}
+                onSelect={(id) => {
+                  setSelectedZoneId(null)
+                  setSelectedId(id)
+                }}
+                onSelectZone={setSelectedZoneId}
                 lang={lang}
               />
 
@@ -251,19 +273,28 @@ export default function App() {
 
         {/* Right panel — desktopda yon panel */}
         <aside className="hidden w-[360px] shrink-0 overflow-y-auto border-l border-slate-800 bg-slate-900/70 md:block">
-          <RegionPanel stats={selected} lang={lang} />
+          {selectedZone ? (
+            <ZonePanel zone={selectedZone} lang={lang} onClose={() => setSelectedZoneId(null)} />
+          ) : (
+            <RegionPanel stats={selected} lang={lang} />
+          )}
         </aside>
       </div>
 
-      {/* Mobil bottom-sheet: hudud tanlanganda pastdan chiqadi */}
-      {selected && (
+      {/* Mobil bottom-sheet: MFY zonasi */}
+      {selectedZone && (
         <div className="fixed inset-0 z-[1000] md:hidden">
-          {/* orqa fon */}
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setSelectedId(null)}
-          />
-          {/* sheet */}
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedZoneId(null)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-2xl border-t border-slate-700 bg-slate-900 shadow-2xl animate-fade">
+            <ZonePanel zone={selectedZone} lang={lang} onClose={() => setSelectedZoneId(null)} />
+          </div>
+        </div>
+      )}
+
+      {/* Mobil bottom-sheet: hudud tanlanganda pastdan chiqadi */}
+      {selected && !selectedZone && (
+        <div className="fixed inset-0 z-[1000] md:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedId(null)} />
           <div className="absolute inset-x-0 bottom-0 max-h-[78dvh] overflow-y-auto rounded-t-2xl border-t border-slate-700 bg-slate-900 shadow-2xl animate-fade">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-800 bg-slate-900/95 px-4 py-2.5 backdrop-blur">
               <div className="mx-auto h-1 w-10 rounded-full bg-slate-600" />

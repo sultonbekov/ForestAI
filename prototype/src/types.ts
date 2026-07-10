@@ -31,6 +31,26 @@ export interface SpeciesShare {
   count: number // taxminiy soni
 }
 
+// Daraxt holati kategoriyalari (yillar bo'yicha)
+export type TreeCategory = 'healthy' | 'atRisk' | 'dead' | 'planted'
+
+export interface YearBreakdown {
+  year: number
+  healthy: number // sog'lom
+  atRisk: number // xavf ostida
+  dead: number // nobud bo'lgan
+  planted: number // shu yil ekilgan
+  total: number // jami (healthy+atRisk+planted, dead alohida)
+}
+
+// MFY (mahalla) zonasi statistikasi
+export interface ZoneStats {
+  id: string
+  name: string
+  districtName: string
+  years: YearBreakdown[] // 2021..2026
+}
+
 export interface RegionStats {
   id: string
   name: string

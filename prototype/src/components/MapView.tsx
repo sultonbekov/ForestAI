@@ -1,27 +1,43 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, GeoJSON, TileLayer, Marker, useMap } from 'react-leaflet'
+import { MapContainer, GeoJSON, TileLayer, ImageOverlay, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Layer, PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
 import type { GeoData, RegionStats } from '../types'
 import type { Lang } from '../i18n'
-import { greeneryColor } from '../data/generateStats'
+import { greeneryColor, generateZoneStats, CATEGORY_COLORS } from '../data/generateStats'
+
+// Copernicus Sentinel-2 tasviri (O'zbekiston chegarasi bo'yicha clip qilingan)
+const SAT_BOUNDS: L.LatLngBoundsExpression = [
+  [37.1, 55.9],
+  [45.6, 73.2],
+]
 
 interface Props {
   regions: GeoData
   districts: GeoData
+  mfy: GeoData | null
   statsById: Record<string, RegionStats>
   selectedId: string | null
   onSelect: (id: string) => void
+  onSelectZone: (zoneId: string | null) => void
   lang: Lang
 }
 
-const BASE_ZOOM = 6 // boshlang'ich zoom
-const ZOOMS_TO_DISTRICTS = 5 // 5 marta yaqinlashtirilgach tumanlar ko'rinadi
-const ZOOM_THRESHOLD = BASE_ZOOM + ZOOMS_TO_DISTRICTS // = 11
+const BASE_ZOOM = 6
+const ZOOM_DISTRICTS = 11 // 5 marta yaqinlashtirilgach tumanlar
+const ZOOM_MFY = 12 // undan yuqorida — MFY zonalari
 
-// Zoom darajasini kuzatuvchi kichik yordamchi
-function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
+// Zoom + xarita instansiyasini kuzatish
+function MapController({
+  onZoom,
+  flyToId,
+  mfy,
+}: {
+  onZoom: (z: number) => void
+  flyToId: string | null
+  mfy: GeoData | null
+}) {
   const map = useMap()
   useEffect(() => {
     const handler = () => onZoom(map.getZoom())
@@ -31,10 +47,35 @@ function ZoomWatcher({ onZoom }: { onZoom: (z: number) => void }) {
       map.off('zoomend', handler)
     }
   }, [map, onZoom])
+
+  // Tanlangan zonaga uchib borish
+  useEffect(() => {
+    if (!flyToId || !mfy) return
+    const id = flyToId.replace('mfy:', '')
+    const f = mfy.features.find((ff) => String(ff.id) === id)
+    if (!f) return
+    const layer = L.geoJSON(f as any)
+    map.flyToBounds(layer.getBounds(), { maxZoom: 14, padding: [40, 40], duration: 0.8 })
+  }, [flyToId, mfy, map])
+
   return null
 }
 
-// Foiz yozuvlarini divIcon marker sifatida chizamiz
+// Dominant kategoriya bo'yicha zona rangi
+function zoneColor(zoneId: string, name: string): string {
+  const zs = generateZoneStats(zoneId, name, '')
+  const last = zs.years[zs.years.length - 1]
+  const cats: [string, number][] = [
+    ['healthy', last.healthy],
+    ['atRisk', last.atRisk],
+    ['dead', last.dead],
+    ['planted', last.planted],
+  ]
+  cats.sort((a, b) => b[1] - a[1])
+  return CATEGORY_COLORS[cats[0][0]]
+}
+
+// Foiz yozuvlari (region/district)
 function PercentLabels({
   geo,
   level,
@@ -78,12 +119,13 @@ function PercentLabels({
 export default function MapView({
   regions,
   districts,
+  mfy,
   statsById,
   selectedId,
   onSelect,
+  onSelectZone,
   lang,
 }: Props) {
-  // Hashdan boshlang'ich ko'rinishni o'qish: #2d@lat,lng,zoom (deep-link / test uchun)
   const hashView = (() => {
     if (typeof window === 'undefined') return null
     const m = window.location.hash.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*),(\d+)/)
@@ -94,11 +136,14 @@ export default function MapView({
   const center: [number, number] = hashView?.center ?? [41.6, 63.5]
   const initialZoom = hashView?.zoom ?? 6
   const [zoom, setZoom] = useState(initialZoom)
-  const showDistricts = zoom >= ZOOM_THRESHOLD
+  const [flyToId, setFlyToId] = useState<string | null>(null)
 
+  const showMfy = zoom >= ZOOM_MFY && !!mfy
+  const showDistricts = zoom >= ZOOM_DISTRICTS && !showMfy
+  const level: 'region' | 'district' = showDistricts || showMfy ? 'district' : 'region'
   const activeGeo = showDistricts ? districts : regions
-  const level: 'region' | 'district' = showDistricts ? 'district' : 'region'
 
+  // --- Region / District qatlami stili ---
   const styleFor = useMemo(
     () =>
       (feature?: Feature): PathOptions => {
@@ -109,10 +154,10 @@ export default function MapView({
           fillColor: st ? greeneryColor(st.greeneryPercent) : '#334155',
           weight: isSel ? 3 : level === 'region' ? 1.6 : 0.7,
           color: isSel ? '#ffffff' : 'rgba(255,255,255,0.55)',
-          fillOpacity: 1, // to'liq to'q, shaffofsiz maska (bizning dark stil)
+          fillOpacity: showMfy ? 0 : 1,
         }
       },
-    [statsById, selectedId, level]
+    [statsById, selectedId, level, showMfy]
   )
 
   const onEachFeature = useMemo(
@@ -131,11 +176,48 @@ export default function MapView({
       }
       layer.on({
         click: () => onSelect(key),
-        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: 1, weight: 2 }),
+        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: showMfy ? 0 : 1, weight: 2 }),
         mouseout: (e) => (e.target as any).setStyle(styleFor(feature as Feature)),
       })
     },
-    [statsById, onSelect, styleFor, level, lang]
+    [statsById, onSelect, styleFor, level, lang, showMfy]
+  )
+
+  // --- MFY qatlami ---
+  const mfyStyle = useMemo(
+    () =>
+      (feature?: Feature): PathOptions => {
+        const key = `mfy:${feature?.id}`
+        const nm = (feature?.properties as { name?: string })?.name ?? ''
+        const isSel = key === selectedId
+        return {
+          fillColor: zoneColor(key, nm),
+          weight: isSel ? 2.5 : 0.8,
+          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.7)',
+          fillOpacity: isSel ? 0.9 : 0.72,
+        }
+      },
+    [selectedId]
+  )
+
+  const onEachMfy = useMemo(
+    () => (feature: Feature, layer: Layer) => {
+      const id = String(feature.id)
+      const props = feature.properties as { name?: string; districtName?: string }
+      layer.bindTooltip(
+        `<b>${props.name ?? ''}</b><br/>${props.districtName ?? ''}`,
+        { className: 'forest-tip', sticky: true }
+      )
+      layer.on({
+        click: () => {
+          onSelectZone(`mfy:${id}`)
+          setFlyToId(`mfy:${id}`)
+        },
+        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: 0.92, weight: 1.6 }),
+        mouseout: (e) => (e.target as any).setStyle(mfyStyle(feature as Feature)),
+      })
+    },
+    [onSelectZone, mfyStyle]
   )
 
   return (
@@ -143,23 +225,45 @@ export default function MapView({
       center={center}
       zoom={initialZoom}
       minZoom={5}
-      maxZoom={11}
+      maxZoom={15}
       className="h-full w-full"
       zoomControl={true}
       attributionControl={false}
     >
-      <ZoomWatcher onZoom={setZoom} />
-      {/* Real sun'iy yo'ldosh tasviri (Esri World Imagery) */}
+      <MapController onZoom={setZoom} flyToId={flyToId} mfy={mfy} />
+
+      {/* Esri World Imagery — kontekst */}
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}" />
-      {/* Shahar / hudud nomlari (yozuvlar) */}
+      {/* Copernicus Sentinel-2 — O'zbekiston statik PNG (tayl-serversiz) */}
+      <ImageOverlay
+        url={`${import.meta.env.BASE_URL}data/uzb_satellite.png`}
+        bounds={SAT_BOUNDS}
+        opacity={1}
+      />
+      {/* Nomlar */}
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
+
+      {/* Region / District maskalari */}
       <GeoJSON
-        key={`${level}-${selectedId ?? 'none'}`}
+        key={`${level}-${showMfy ? 'mfy' : 'base'}-${selectedId ?? 'none'}`}
         data={activeGeo as unknown as GeoJSON.GeoJsonObject}
         style={styleFor as any}
         onEachFeature={onEachFeature as any}
       />
-      <PercentLabels geo={activeGeo} level={level} statsById={statsById} />
+
+      {/* MFY zonalari (chuqur zoom) */}
+      {showMfy && mfy && (
+        <GeoJSON
+          key={`mfy-layer-${selectedId ?? 'none'}`}
+          data={mfy as unknown as GeoJSON.GeoJsonObject}
+          style={mfyStyle as any}
+          onEachFeature={onEachMfy as any}
+        />
+      )}
+
+      {!showMfy && (
+        <PercentLabels geo={activeGeo} level={level} statsById={statsById} />
+      )}
     </MapContainer>
   )
 }

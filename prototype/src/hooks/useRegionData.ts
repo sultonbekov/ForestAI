@@ -7,6 +7,7 @@ export type Level = 'region' | 'district'
 export interface RegionData {
   regions: GeoData | null
   districts: GeoData | null
+  mfy: GeoData | null // mahalla (MFY) zonalari
   statsById: Record<string, RegionStats> // "region:<id>" yoki "district:<id>"
   loading: boolean
   error: string | null
@@ -32,6 +33,7 @@ function statsForLevel(
 export function useRegionData(): RegionData {
   const [regions, setRegions] = useState<GeoData | null>(null)
   const [districts, setDistricts] = useState<GeoData | null>(null)
+  const [mfy, setMfy] = useState<GeoData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -53,6 +55,12 @@ export function useRegionData(): RegionData {
       })
       .catch((e) => setError(String(e.message ?? e)))
       .finally(() => setLoading(false))
+
+    // MFY zonalari — alohida (kattaroq fayl, keyinroq kerak bo'ladi)
+    fetch(`${base}data/mfy.geojson`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m: GeoData | null) => m && setMfy(m))
+      .catch(() => {})
   }, [])
 
   const statsById = useMemo(() => {
@@ -81,5 +89,5 @@ export function useRegionData(): RegionData {
     return { totalTrees, avgGreenery, districts: distStats.length }
   }, [regions, districts, statsById])
 
-  return { regions, districts, statsById, loading, error, national }
+  return { regions, districts, mfy, statsById, loading, error, national }
 }

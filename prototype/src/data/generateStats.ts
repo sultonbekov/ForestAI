@@ -1,4 +1,11 @@
-import type { RegionStats, TrendPoint, SpeciesId, SpeciesShare } from '../types'
+import type {
+  RegionStats,
+  TrendPoint,
+  SpeciesId,
+  SpeciesShare,
+  ZoneStats,
+  YearBreakdown,
+} from '../types'
 
 // Bargli daraxt turlari (rasmga mos + chinor)
 export const SPECIES: { id: SpeciesId; color: string; emoji: string }[] = [
@@ -125,4 +132,47 @@ export function greeneryColor(pct: number): string {
     }
   }
   return `rgb(21, 128, 61)`
+}
+
+// Daraxt holati kategoriyalari uchun ranglar
+export const CATEGORY_COLORS: Record<string, string> = {
+  healthy: '#22c55e', // sog'lom — yashil
+  atRisk: '#facc15', // xavf ostida — sariq
+  dead: '#ef4444', // nobud — qizil
+  planted: '#38bdf8', // ekilgan — ko'k
+}
+
+// MFY zonasi uchun yillik daraxt kategoriyalari (2021..2026).
+// "Yashil makon" dasturi: har yili yangi ekilgan daraxtlar qo'shiladi,
+// sog'lom soni o'sadi, ba'zilari xavf ostida yoki nobud bo'ladi.
+export function generateZoneStats(id: string, name: string, districtName: string): ZoneStats {
+  const rand = mulberry32(hashString(name))
+
+  // Zona "profili" — har xil zonalar har xil holatda bo'lsin (rang xilma-xilligi uchun)
+  // 0..1: 0.55 sog'lom, 0.2 xavf, 0.13 ekilgan (yosh), 0.12 muammoli
+  const p = rand()
+  const profile =
+    p < 0.55 ? 'healthy' : p < 0.75 ? 'atRisk' : p < 0.88 ? 'planted' : 'dead'
+
+  let healthy = Math.round(1200 + rand() * 6000)
+  const years: YearBreakdown[] = []
+
+  for (let y = 2021; y <= 2026; y++) {
+    // Ekilgan — "planted" profilida ko'proq (yangi mahalla)
+    const plantMul = profile === 'planted' ? 2.4 : 1
+    const planted = Math.round(300 + rand() * 1800 * (1 + (y - 2021) * 0.12) * plantMul)
+    // Xavf ostida — "atRisk" profilida ko'proq
+    const riskMul = profile === 'atRisk' ? 3.2 : 1
+    const atRisk = Math.round(healthy * (0.06 + rand() * 0.1) * riskMul)
+    // Nobud — "dead" profilida ko'proq
+    const deadMul = profile === 'dead' ? 4 : 1
+    const dead = Math.round(healthy * (0.02 + rand() * 0.05) * deadMul)
+    const total = healthy + atRisk + planted
+
+    years.push({ year: y, healthy, atRisk, dead, planted, total })
+
+    healthy = Math.round(healthy + planted * (0.75 + rand() * 0.15) + atRisk * 0.4 - dead * 0.5)
+  }
+
+  return { id, name, districtName, years }
 }
