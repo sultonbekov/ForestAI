@@ -36,6 +36,11 @@ export default function App() {
     const m = window.location.hash.match(/reg(\d+)/)
     return m ? Number(m[1]) : null
   })
+  const [selectedYear, setSelectedYear] = useState(() => {
+    if (typeof window === 'undefined') return 2026
+    const m = window.location.hash.match(/year=(\d{4})/)
+    return m ? Number(m[1]) : 2026
+  }) // xarita daraxtlari + panel sinxron
 
   const selected = selectedId ? statsById[selectedId] ?? null : null
   const ready = regions && districts && !error
@@ -161,12 +166,17 @@ export default function App() {
                 districts={districts}
                 mfy={mfy}
                 statsById={statsById}
-                selectedId={selectedZoneId ?? selectedId}
+                selectedId={selectedId}
+                selectedZoneId={selectedZoneId}
+                selectedYear={selectedYear}
                 onSelect={(id) => {
                   setSelectedZoneId(null)
                   setSelectedId(id)
                 }}
-                onSelectZone={setSelectedZoneId}
+                onSelectZone={(z) => {
+                  setSelectedId(null)
+                  setSelectedZoneId(z)
+                }}
                 lang={lang}
               />
 
@@ -274,7 +284,7 @@ export default function App() {
         {/* Right panel — desktopda yon panel */}
         <aside className="hidden w-[360px] shrink-0 overflow-y-auto border-l border-slate-800 bg-slate-900/70 md:block">
           {selectedZone ? (
-            <ZonePanel zone={selectedZone} lang={lang} onClose={() => setSelectedZoneId(null)} />
+            <ZonePanel zone={selectedZone} lang={lang} year={selectedYear} onYearChange={setSelectedYear} onClose={() => setSelectedZoneId(null)} />
           ) : (
             <RegionPanel stats={selected} lang={lang} />
           )}
@@ -286,7 +296,7 @@ export default function App() {
         <div className="fixed inset-0 z-[1000] md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedZoneId(null)} />
           <div className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-2xl border-t border-slate-700 bg-slate-900 shadow-2xl animate-fade">
-            <ZonePanel zone={selectedZone} lang={lang} onClose={() => setSelectedZoneId(null)} />
+            <ZonePanel zone={selectedZone} lang={lang} year={selectedYear} onYearChange={setSelectedYear} onClose={() => setSelectedZoneId(null)} />
           </div>
         </div>
       )}

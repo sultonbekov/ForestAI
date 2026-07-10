@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { ZoneStats } from '../types'
 import type { Lang } from '../i18n'
 import { tr } from '../i18n'
@@ -7,6 +6,8 @@ import { CATEGORY_COLORS } from '../data/generateStats'
 interface Props {
   zone: ZoneStats
   lang: Lang
+  year: number // boshqariladigan yil (xarita bilan sinxron)
+  onYearChange: (y: number) => void
   onClose: () => void
 }
 
@@ -19,8 +20,9 @@ const CATS = [
   { key: 'dead', tkey: 'cat_dead' as const },
 ] as const
 
-export default function ZonePanel({ zone, lang, onClose }: Props) {
-  const [yearIdx, setYearIdx] = useState(zone.years.length - 1)
+export default function ZonePanel({ zone, lang, year, onYearChange, onClose }: Props) {
+  const yearIdx = Math.max(0, zone.years.findIndex((y) => y.year === year))
+  const setYearIdx = (i: number) => onYearChange(zone.years[i].year)
   const yb = zone.years[yearIdx]
   const grandTotal = yb.healthy + yb.atRisk + yb.planted + yb.dead
 
