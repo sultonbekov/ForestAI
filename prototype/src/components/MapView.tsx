@@ -161,11 +161,93 @@ function buildZoneTrees(feature: Feature, zoneKey: string): TreePt[] {
   return pts
 }
 
+// Bitta canvas'da barcha daraxt nuqtalarini chizadigan yengil qatlam.
+// 220 ta alohida marker o'rniga — bitta overlay, har kadr setStyle yo'q.
+const TreeCanvasLayer = L.Layer.extend({
+  initialize(this: any, trees: TreePt[]) {
+    this._trees = trees
+    this._yearIdx = 0
+    this._alpha = 1
+  },
+  onAdd(this: any, map: L.Map) {
+    this._map = map
+    const canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated') as HTMLCanvasElement
+    this._canvas = canvas
+    const size = map.getSize()
+    canvas.width = size.x
+    canvas.height = size.y
+    map.getPanes().overlayPane.appendChild(canvas)
+    map.on('moveend zoomend resize viewreset', this._reset, this)
+    map.on('move', this._onMove, this)
+    this._reset()
+    return this
+  },
+  onRemove(this: any, map: L.Map) {
+    cancelAnimationFrame(this._raf)
+    if (this._canvas.parentNode) map.getPanes().overlayPane.removeChild(this._canvas)
+    map.off('moveend zoomend resize viewreset', this._reset, this)
+    map.off('move', this._onMove, this)
+    this._map = null
+  },
+  setYear(this: any, yearIdx: number) {
+    this._yearIdx = yearIdx
+    this._alpha = 0
+    const start = performance.now()
+    const step = () => {
+      if (!this._map) return
+      this._alpha = Math.min(1, (performance.now() - start) / 350)
+      this._draw()
+      if (this._alpha < 1) this._raf = requestAnimationFrame(step)
+    }
+    cancelAnimationFrame(this._raf)
+    this._raf = requestAnimationFrame(step)
+  },
+  _onMove(this: any) {
+    if (!this._map) return
+    const topLeft = this._map.containerPointToLayerPoint([0, 0])
+    L.DomUtil.setPosition(this._canvas, topLeft)
+    this._draw()
+  },
+  _reset(this: any) {
+    if (!this._map) return
+    const size = this._map.getSize()
+    this._canvas.width = size.x
+    this._canvas.height = size.y
+    const topLeft = this._map.containerPointToLayerPoint([0, 0])
+    L.DomUtil.setPosition(this._canvas, topLeft)
+    this._draw()
+  },
+  _draw(this: any) {
+    if (!this._map) return
+    const ctx = this._canvas.getContext('2d') as CanvasRenderingContext2D
+    const map = this._map
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height)
+    const yi = this._yearIdx
+    const a = this._alpha
+    const bounds = map.getBounds().pad(0.1)
+    for (const t of this._trees as TreePt[]) {
+      const cat = t.byYear[yi]
+      if (!cat) continue
+      if (t.lat < bounds.getSouth() || t.lat > bounds.getNorth()) continue
+      if (t.lng < bounds.getWest() || t.lng > bounds.getEast()) continue
+      const p = map.latLngToLayerPoint([t.lat, t.lng])
+      const origin = map.containerPointToLayerPoint([0, 0])
+      const x = p.x - origin.x
+      const y = p.y - origin.y
+      ctx.globalAlpha = 0.9 * a
+      ctx.fillStyle = CATEGORY_COLORS[cat]
+      ctx.beginPath()
+      ctx.arc(x, y, 3, 0, Math.PI * 2)
+      ctx.fill()
+    }
+    ctx.globalAlpha = 1
+  },
+})
+
 function ZoneTrees({
   feature,
   zoneKey,
   yearIdx,
-  yearCount,
 }: {
   feature: Feature
   zoneKey: string
@@ -173,56 +255,19 @@ function ZoneTrees({
   yearCount: number
 }) {
   const map = useMap()
-
   const trees = useMemo(() => buildZoneTrees(feature, zoneKey), [feature, zoneKey])
+  const layerRef = useMemo(() => new (TreeCanvasLayer as any)(trees), [trees])
 
   useEffect(() => {
-    const renderer = L.canvas({ padding: 0.5 })
-    const layerGroup = L.layerGroup().addTo(map)
-    const markers: L.CircleMarker[] = []
-    for (const t of trees) {
-      const m = L.circleMarker([t.lat, t.lng], {
-        renderer,
-        radius: 3.2,
-        weight: 0.5,
-        color: 'rgba(0,0,0,0.35)',
-        fillOpacity: 0,
-        opacity: 0,
-      })
-      m.addTo(layerGroup)
-      markers.push(m)
-    }
-
-    // Yil o'zgarganda silliq (fade) o'tish
-    let raf = 0
-    const start = performance.now()
-    const DUR = 500
-    function animate() {
-      const t = Math.min(1, (performance.now() - start) / DUR)
-      trees.forEach((tree, i) => {
-        const cat = tree.byYear[Math.min(yearIdx, yearCount - 1)]
-        const mk = markers[i]
-        if (!cat) {
-          mk.setStyle({ fillOpacity: 0, opacity: 0 })
-        } else {
-          const col = CATEGORY_COLORS[cat]
-          mk.setStyle({
-            fillColor: col,
-            fillOpacity: 0.9 * t,
-            opacity: 0.6 * t,
-          })
-        }
-      })
-      if (t < 1) raf = requestAnimationFrame(animate)
-    }
-    animate()
-
+    layerRef.addTo(map)
     return () => {
-      cancelAnimationFrame(raf)
-      map.removeLayer(layerGroup)
+      map.removeLayer(layerRef)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trees, yearIdx])
+  }, [map, layerRef])
+
+  useEffect(() => {
+    layerRef.setYear(yearIdx)
+  }, [layerRef, yearIdx])
 
   return null
 }
@@ -266,6 +311,111 @@ function PercentLabels({
       })}
     </>
   )
+}
+
+// --- MFY qatlami: Canvas renderer + viewport-culling ---
+// 9452 SVG path o'rniga: canvas'da chizish + faqat ko'rinadigan mahallalarni
+// render qilish (moveend'da qayta hisoblanadi). Bu FPS'ni keskin oshiradi.
+interface BBox {
+  minx: number
+  miny: number
+  maxx: number
+  maxy: number
+}
+function featureBBox(f: Feature): BBox {
+  let minx = Infinity,
+    miny = Infinity,
+    maxx = -Infinity,
+    maxy = -Infinity
+  const walk = (o: any) => {
+    if (typeof o[0] === 'number') {
+      if (o[0] < minx) minx = o[0]
+      if (o[0] > maxx) maxx = o[0]
+      if (o[1] < miny) miny = o[1]
+      if (o[1] > maxy) maxy = o[1]
+    } else for (const x of o) walk(x)
+  }
+  walk((f.geometry as any).coordinates)
+  return { minx, miny, maxx, maxy }
+}
+
+function MfyCulledLayer({
+  mfy,
+  selectedZoneId,
+  onSelectZone,
+  onFlyTo,
+}: {
+  mfy: GeoData
+  selectedZoneId: string | null
+  onSelectZone: (id: string) => void
+  onFlyTo: (id: string) => void
+}) {
+  const map = useMap()
+  // bbox'larni bir marta hisoblaymiz
+  const bboxes = useMemo(() => mfy.features.map((f) => featureBBox(f as unknown as Feature)), [mfy])
+  const rendererRef = useMemo(() => L.canvas({ padding: 0.3 }), [])
+  const selRef = useMemo(() => ({ id: selectedZoneId }), [])
+  selRef.id = selectedZoneId
+
+  useEffect(() => {
+    const layer = L.geoJSON(undefined, {
+      renderer: rendererRef,
+      style: (feature?: Feature): PathOptions => {
+        const isSel = feature ? `mfy:${feature.id}` === selRef.id : false
+        return {
+          fillColor: '#22c55e',
+          weight: isSel ? 3 : 1,
+          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.8)',
+          fillOpacity: isSel ? 0.08 : 0.01,
+        }
+      },
+      onEachFeature: (feature: Feature, lyr: Layer) => {
+        const id = String(feature.id)
+        const props = feature.properties as { name?: string; districtName?: string }
+        lyr.bindTooltip(`<b>${props.name ?? ''}</b><br/>${props.districtName ?? ''}`, {
+          className: 'forest-tip',
+          sticky: true,
+        })
+        lyr.on('click', () => {
+          onSelectZone(`mfy:${id}`)
+          onFlyTo(`mfy:${id}`)
+        })
+      },
+    } as any).addTo(map)
+
+    let lastKey = ''
+    const update = () => {
+      const b = map.getBounds().pad(0.25)
+      const w = b.getWest(),
+        e = b.getEast(),
+        s = b.getSouth(),
+        n = b.getNorth()
+      const z = map.getZoom()
+      // limit — juda ko'p bo'lsa ham cheklaymiz
+      const visible: Feature[] = []
+      for (let i = 0; i < mfy.features.length; i++) {
+        const bb = bboxes[i]
+        if (bb.maxx < w || bb.minx > e || bb.maxy < s || bb.miny > n) continue
+        visible.push(mfy.features[i] as Feature)
+        if (visible.length > 900) break
+      }
+      const key = `${z.toFixed(1)}:${visible.length}:${Math.round(w * 100)}:${Math.round(s * 100)}`
+      if (key === lastKey) return
+      lastKey = key
+      layer.clearLayers()
+      layer.addData({ type: 'FeatureCollection', features: visible } as any)
+    }
+    update()
+    map.on('moveend zoomend', update)
+
+    return () => {
+      map.off('moveend zoomend', update)
+      map.removeLayer(layer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, mfy, bboxes, rendererRef])
+
+  return null
 }
 
 export default function MapView({
@@ -345,42 +495,6 @@ export default function MapView({
     [statsById, onSelect, styleFor, level, lang, showMfy]
   )
 
-  // --- MFY qatlami: FAQAT CHEGARA (to'ldirishsiz), zichligiga qarab yashil tus ---
-  const mfyStyle = useMemo(
-    () =>
-      (feature?: Feature): PathOptions => {
-        const key = `mfy:${feature?.id}`
-        const isSel = key === selectedZoneId
-        return {
-          fillColor: '#22c55e',
-          weight: isSel ? 3 : 1.2,
-          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.85)',
-          fillOpacity: isSel ? 0.08 : 0.02, // deyarli shaffof — faqat chegara
-        }
-      },
-    [selectedZoneId]
-  )
-
-  const onEachMfy = useMemo(
-    () => (feature: Feature, layer: Layer) => {
-      const id = String(feature.id)
-      const props = feature.properties as { name?: string; districtName?: string }
-      layer.bindTooltip(
-        `<b>${props.name ?? ''}</b><br/>${props.districtName ?? ''}`,
-        { className: 'forest-tip', sticky: true }
-      )
-      layer.on({
-        click: () => {
-          onSelectZone(`mfy:${id}`)
-          setFlyToId(`mfy:${id}`)
-        },
-        mouseover: (e) => (e.target as any).setStyle({ fillOpacity: 0.15, weight: 2 }),
-        mouseout: (e) => (e.target as any).setStyle(mfyStyle(feature as Feature)),
-      })
-    },
-    [onSelectZone, mfyStyle]
-  )
-
   return (
     <MapContainer
       center={center}
@@ -390,6 +504,7 @@ export default function MapView({
       className="h-full w-full"
       zoomControl={true}
       attributionControl={false}
+      preferCanvas={true}
     >
       <MapController onZoom={setZoom} flyToId={flyToId} mfy={mfy} />
 
@@ -420,13 +535,13 @@ export default function MapView({
         />
       )}
 
-      {/* MFY zonalari — faqat chegara */}
+      {/* MFY zonalari — canvas + viewport-culling (yengil) */}
       {showMfy && mfy && (
-        <GeoJSON
-          key={`mfy-layer-${selectedZoneId ?? 'none'}`}
-          data={mfy as unknown as GeoJSON.GeoJsonObject}
-          style={mfyStyle as any}
-          onEachFeature={onEachMfy as any}
+        <MfyCulledLayer
+          mfy={mfy}
+          selectedZoneId={selectedZoneId}
+          onSelectZone={onSelectZone}
+          onFlyTo={setFlyToId}
         />
       )}
 
