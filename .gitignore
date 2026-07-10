@@ -17,16 +17,12 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Temp / extracted shapefiles / archives
+# Konfidentsial manba arxivlar/shapefile'lar — git'ga tushmasin
 tuman_extract/
 ilova_extract/
 *.rar
 *.zip
 *.tmp
-
-# KONFIDENTSIAL DATA — git'ga tushmasin (lokalda qoladi, prototip ishlaydi)
-prototype/public/data/
-*.geojson
 *.shp
 *.dbf
 *.shx
@@ -35,6 +31,8 @@ prototype/public/data/
 *.sbn
 *.sbx
 Forest_AI.pptx
+
+# NOTE: prototype/public/data/*.geojson — MOCK/publik data (deploy uchun kerak)
 
 # Env
 .env
