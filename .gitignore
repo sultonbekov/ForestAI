@@ -17,8 +17,10 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Temp / extracted shapefiles
+# Temp / extracted shapefiles / archives
 tuman_extract/
+ilova_extract/
+*.rar
 *.tmp
 
 # Env
