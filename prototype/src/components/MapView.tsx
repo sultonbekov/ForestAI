@@ -1,17 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MapContainer, GeoJSON, TileLayer, ImageOverlay, Marker, useMap } from 'react-leaflet'
+import { MapContainer, GeoJSON, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Layer, PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
 import type { GeoData, RegionStats } from '../types'
 import type { Lang } from '../i18n'
 import { greeneryColor, generateZoneStats, CATEGORY_COLORS } from '../data/generateStats'
-
-// Copernicus Sentinel-2 tasviri (O'zbekiston chegarasi bo'yicha clip qilingan)
-const SAT_BOUNDS: L.LatLngBoundsExpression = [
-  [37.1, 55.9],
-  [45.6, 73.2],
-]
 
 interface Props {
   regions: GeoData
@@ -508,20 +502,12 @@ export default function MapView({
     >
       <MapController onZoom={setZoom} flyToId={flyToId} mfy={mfy} />
 
-      {/* Esri World Imagery — chuqur zoomda aniq (4K) tasvir manbai */}
+      {/* Esri World Imagery — sun'iy yo'ldosh fon (publik, barcha zoomlarda aniq) */}
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         maxNativeZoom={19}
         maxZoom={19}
       />
-      {/* Copernicus Sentinel-2 — faqat uzoq zoomda (MFY/zona rejimida Esri aniqroq) */}
-      {!showMfy && (
-        <ImageOverlay
-          url={`${import.meta.env.BASE_URL}data/uzb_satellite.png`}
-          bounds={SAT_BOUNDS}
-          opacity={1}
-        />
-      )}
       {/* Nomlar */}
       <TileLayer url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}" />
 
