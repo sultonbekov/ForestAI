@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { MapContainer, GeoJSON, TileLayer, Marker, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Layer, PathOptions } from 'leaflet'
@@ -157,87 +157,9 @@ function buildZoneTrees(feature: Feature, zoneKey: string): TreePt[] {
 
 // Bitta canvas'da barcha daraxt nuqtalarini chizadigan yengil qatlam.
 // 220 ta alohida marker o'rniga — bitta overlay, har kadr setStyle yo'q.
-const TreeCanvasLayer = L.Layer.extend({
-  initialize(this: any, trees: TreePt[]) {
-    this._trees = trees
-    this._yearIdx = 0
-    this._alpha = 1
-  },
-  onAdd(this: any, map: L.Map) {
-    this._map = map
-    const canvas = L.DomUtil.create('canvas', 'leaflet-zoom-animated') as HTMLCanvasElement
-    this._canvas = canvas
-    const size = map.getSize()
-    canvas.width = size.x
-    canvas.height = size.y
-    map.getPanes().overlayPane.appendChild(canvas)
-    map.on('moveend zoomend resize viewreset', this._reset, this)
-    map.on('move', this._onMove, this)
-    this._reset()
-    return this
-  },
-  onRemove(this: any, map: L.Map) {
-    cancelAnimationFrame(this._raf)
-    if (this._canvas.parentNode) map.getPanes().overlayPane.removeChild(this._canvas)
-    map.off('moveend zoomend resize viewreset', this._reset, this)
-    map.off('move', this._onMove, this)
-    this._map = null
-  },
-  setYear(this: any, yearIdx: number) {
-    this._yearIdx = yearIdx
-    this._alpha = 0
-    const start = performance.now()
-    const step = () => {
-      if (!this._map) return
-      this._alpha = Math.min(1, (performance.now() - start) / 350)
-      this._draw()
-      if (this._alpha < 1) this._raf = requestAnimationFrame(step)
-    }
-    cancelAnimationFrame(this._raf)
-    this._raf = requestAnimationFrame(step)
-  },
-  _onMove(this: any) {
-    if (!this._map) return
-    const topLeft = this._map.containerPointToLayerPoint([0, 0])
-    L.DomUtil.setPosition(this._canvas, topLeft)
-    this._draw()
-  },
-  _reset(this: any) {
-    if (!this._map) return
-    const size = this._map.getSize()
-    this._canvas.width = size.x
-    this._canvas.height = size.y
-    const topLeft = this._map.containerPointToLayerPoint([0, 0])
-    L.DomUtil.setPosition(this._canvas, topLeft)
-    this._draw()
-  },
-  _draw(this: any) {
-    if (!this._map) return
-    const ctx = this._canvas.getContext('2d') as CanvasRenderingContext2D
-    const map = this._map
-    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height)
-    const yi = this._yearIdx
-    const a = this._alpha
-    const bounds = map.getBounds().pad(0.1)
-    for (const t of this._trees as TreePt[]) {
-      const cat = t.byYear[yi]
-      if (!cat) continue
-      if (t.lat < bounds.getSouth() || t.lat > bounds.getNorth()) continue
-      if (t.lng < bounds.getWest() || t.lng > bounds.getEast()) continue
-      const p = map.latLngToLayerPoint([t.lat, t.lng])
-      const origin = map.containerPointToLayerPoint([0, 0])
-      const x = p.x - origin.x
-      const y = p.y - origin.y
-      ctx.globalAlpha = 0.9 * a
-      ctx.fillStyle = CATEGORY_COLORS[cat]
-      ctx.beginPath()
-      ctx.arc(x, y, 3, 0, Math.PI * 2)
-      ctx.fill()
-    }
-    ctx.globalAlpha = 1
-  },
-})
-
+// Daraxt nuqtalari — Leaflet'ning o'z canvas renderer'i orqali circleMarker.
+// Nuqtalar xarita bilan to'g'ri harakatlanadi (zoom/pan da joyida turadi),
+// yil o'zgarganda faqat rang/ko'rinish yangilanadi (har kadr emas).
 function ZoneTrees({
   feature,
   zoneKey,
@@ -250,18 +172,51 @@ function ZoneTrees({
 }) {
   const map = useMap()
   const trees = useMemo(() => buildZoneTrees(feature, zoneKey), [feature, zoneKey])
-  const layerRef = useMemo(() => new (TreeCanvasLayer as any)(trees), [trees])
+
+  // Bir marta renderer + markerlar yaratamiz
+  const { group, markers } = useMemo(() => {
+    const renderer = L.canvas({ padding: 0.5 })
+    const group = L.layerGroup()
+    const markers = trees.map((t) =>
+      L.circleMarker([t.lat, t.lng], {
+        renderer,
+        radius: 3,
+        weight: 0,
+        fillOpacity: 0,
+        interactive: false,
+      })
+    )
+    markers.forEach((m) => m.addTo(group))
+    return { group, markers }
+  }, [trees])
 
   useEffect(() => {
-    layerRef.addTo(map)
-    return () => {
-      map.removeLayer(layerRef)
+    group.addTo(map)
+    // Zoom bo'yicha nuqta radiusi (yaqinlashtirilганда kattaroq)
+    const applyRadius = () => {
+      const z = map.getZoom()
+      const r = Math.max(2.5, Math.min(7, (z - 9) * 1.4))
+      markers.forEach((m) => m.setRadius(r))
     }
-  }, [map, layerRef])
+    applyRadius()
+    map.on('zoomend', applyRadius)
+    return () => {
+      map.off('zoomend', applyRadius)
+      map.removeLayer(group)
+    }
+  }, [map, group, markers])
 
+  // Yil o'zgarganda markerlar rangini yangilash
   useEffect(() => {
-    layerRef.setYear(yearIdx)
-  }, [layerRef, yearIdx])
+    markers.forEach((m, i) => {
+      const cat = trees[i].byYear[yearIdx]
+      if (!cat) {
+        m.setStyle({ fillOpacity: 0 })
+      } else {
+        m.setStyle({ fillColor: CATEGORY_COLORS[cat], fillOpacity: 0.9, stroke: false })
+      }
+    })
+  }, [markers, trees, yearIdx])
 
   return null
 }
@@ -345,24 +300,30 @@ function MfyCulledLayer({
   onFlyTo: (id: string) => void
 }) {
   const map = useMap()
-  // bbox'larni bir marta hisoblaymiz
   const bboxes = useMemo(() => mfy.features.map((f) => featureBBox(f as unknown as Feature)), [mfy])
   const rendererRef = useMemo(() => L.canvas({ padding: 0.3 }), [])
-  const selRef = useMemo(() => ({ id: selectedZoneId }), [])
-  selRef.id = selectedZoneId
 
+  // Callbacklar va tanlov — ref orqali (har doim yangi, effekt qayta qurilmasin)
+  const selRef = useRef<string | null>(selectedZoneId)
+  selRef.current = selectedZoneId
+  const cbRef = useRef({ onSelectZone, onFlyTo })
+  cbRef.current = { onSelectZone, onFlyTo }
+  const layerHolder = useRef<any>(null)
+
+  // Qatlam va update funksiyasini bir marta yaratamiz
   useEffect(() => {
+    const styleFn = (feature?: Feature): PathOptions => {
+      const isSel = feature ? `mfy:${feature.id}` === selRef.current : false
+      return {
+        fillColor: '#22c55e',
+        weight: isSel ? 3 : 1,
+        color: isSel ? '#ffffff' : 'rgba(255,255,255,0.8)',
+        fillOpacity: isSel ? 0.1 : 0.01,
+      }
+    }
     const layer = L.geoJSON(undefined, {
       renderer: rendererRef,
-      style: (feature?: Feature): PathOptions => {
-        const isSel = feature ? `mfy:${feature.id}` === selRef.id : false
-        return {
-          fillColor: '#22c55e',
-          weight: isSel ? 3 : 1,
-          color: isSel ? '#ffffff' : 'rgba(255,255,255,0.8)',
-          fillOpacity: isSel ? 0.08 : 0.01,
-        }
-      },
+      style: styleFn,
       onEachFeature: (feature: Feature, lyr: Layer) => {
         const id = String(feature.id)
         const props = feature.properties as { name?: string; districtName?: string }
@@ -370,22 +331,21 @@ function MfyCulledLayer({
           className: 'forest-tip',
           sticky: true,
         })
-        lyr.on('click', () => {
-          onSelectZone(`mfy:${id}`)
-          onFlyTo(`mfy:${id}`)
+        lyr.on('click', (e: any) => {
+          L.DomEvent.stopPropagation(e)
+          cbRef.current.onSelectZone(`mfy:${id}`)
+          cbRef.current.onFlyTo(`mfy:${id}`)
         })
       },
     } as any).addTo(map)
+    ;(layer as any)._styleFn = styleFn
 
-    let lastKey = ''
-    const update = () => {
+    const rebuild = () => {
       const b = map.getBounds().pad(0.25)
       const w = b.getWest(),
         e = b.getEast(),
         s = b.getSouth(),
         n = b.getNorth()
-      const z = map.getZoom()
-      // limit — juda ko'p bo'lsa ham cheklaymiz
       const visible: Feature[] = []
       for (let i = 0; i < mfy.features.length; i++) {
         const bb = bboxes[i]
@@ -393,21 +353,27 @@ function MfyCulledLayer({
         visible.push(mfy.features[i] as Feature)
         if (visible.length > 900) break
       }
-      const key = `${z.toFixed(1)}:${visible.length}:${Math.round(w * 100)}:${Math.round(s * 100)}`
-      if (key === lastKey) return
-      lastKey = key
       layer.clearLayers()
       layer.addData({ type: 'FeatureCollection', features: visible } as any)
     }
-    update()
-    map.on('moveend zoomend', update)
+    rebuild()
+    map.on('moveend zoomend', rebuild)
+    layerHolder.current = layer
 
     return () => {
-      map.off('moveend zoomend', update)
+      map.off('moveend zoomend', rebuild)
       map.removeLayer(layer)
+      layerHolder.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, mfy, bboxes, rendererRef])
+
+  // Tanlov o'zgarganda — qayta qurmasdan faqat stilni yangilaymiz
+  useEffect(() => {
+    const layer = layerHolder.current
+    if (!layer) return
+    layer.setStyle((layer as any).options.style)
+  }, [selectedZoneId])
 
   return null
 }
@@ -438,7 +404,8 @@ export default function MapView({
 
   const showMfy = zoom >= ZOOM_MFY && !!mfy
   const showDistricts = zoom >= ZOOM_DISTRICTS && !showMfy
-  const showTrees = zoom >= ZOOM_TREES
+  // Daraxtlar — zona tanlangan bo'lsa va yetarli yaqinlashtirilganda ko'rsatiladi
+  const showTrees = !!selectedZoneId && zoom >= ZOOM_MFY
   const level: 'region' | 'district' = showDistricts || showMfy ? 'district' : 'region'
   const activeGeo = showDistricts ? districts : regions
 
